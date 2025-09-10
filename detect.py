@@ -83,21 +83,55 @@ if __name__ == '__main__':
     device = torch.device("cpu" if args.cpu else "cuda")
     net = net.to(device)
 
+    # resize value is no longer used, but kept for consistency
     resize = 1
 
     # testing begin
     for i in range(1):
-        image_path = "./curve/test.jpg"
+        image_path = "/home/Huangzhe/test/manu-pc/tmp/padded_test.bmp"
         img_raw = cv2.imread(image_path, cv2.IMREAD_COLOR)
 
-        img = np.float32(img_raw)
+        # ----------------- MODIFICATION START: Image padding and resizing -----------------
+        # Original image dimensions
+        orig_h, orig_w, _ = img_raw.shape
 
-        im_height, im_width, _ = img.shape
+        # Target size
+        target_size = 640
+
+        # Calculate scaling factor and new size
+        scale_ratio = target_size / max(orig_h, orig_w)
+        new_w = int(orig_w * scale_ratio)
+        new_h = int(orig_h * scale_ratio)
+
+        # Resize image
+        resized_img = cv2.resize(img_raw, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+
+        # Create a black canvas and paste the resized image
+        padded_img = np.zeros((target_size, target_size, 3), dtype=np.uint8)
+        padded_img[0:new_h, 0:new_w] = resized_img
+
+        # Define save directory
+        save_dir = "/home/Huangzhe/test/manu-pc/tmp/"
+        # Make sure directory exists
+        os.makedirs(save_dir, exist_ok=True)
+
+        # Save the padded image as a BMP file
+        padded_bmp_path = os.path.join(save_dir, "padded_test.bmp")
+        cv2.imwrite(padded_bmp_path, padded_img)
+        print(f"Padded image saved to {padded_bmp_path}")
+
+        # The network will now process the padded image
+        img = np.float32(padded_img)
+
+        # Prepare image for network
+        im_height, im_width, _ = img.shape  # Now im_height and im_width are 640
         scale = torch.Tensor([img.shape[1], img.shape[0], img.shape[1], img.shape[0]])
         img -= (104, 117, 123)
         img = img.transpose(2, 0, 1)
         img = torch.from_numpy(img).unsqueeze(0)
         img = img.to(device)
+        # ----------------- MODIFICATION END ------------------------------------------
+
         scale = scale.to(device)
 
         tic = time.time()
@@ -149,7 +183,7 @@ if __name__ == '__main__':
         if args.save_image:
             # ----------------- MODIFICATION START -----------------
             # Define save path for image and txt, and open txt file for writing
-            save_img_path = "/home/Huangzhe/test/manu-pc/tmp/test.jpg"
+            save_img_path = os.path.join(save_dir, "test.jpg")
             save_txt_path = os.path.splitext(save_img_path)[0] + ".txt"
             f_txt = open(save_txt_path, 'w')
             # ----------------- MODIFICATION END -------------------
@@ -158,15 +192,21 @@ if __name__ == '__main__':
                 if b[4] < args.vis_thres:
                     continue
 
-                # ----------------- MODIFICATION START -----------------
-                # Save detection to txt file: bbox, score, and kps
-                # Format: x1 y1 x2 y2 score ldm1_x ldm1_y ... ldm5_x ldm5_y
-                line = f"{int(b[0])} {int(b[1])} {int(b[2])} {int(b[3])} {b[4]:.5f} {int(b[5])} {int(b[6])} {int(b[7])} {int(b[8])} {int(b[9])} {int(b[10])} {int(b[11])} {int(b[12])} {int(b[13])} {int(b[14])}\n"
-                f_txt.write(line)
-                # ----------------- MODIFICATION END -------------------
+                # ----------------- MODIFICATION START: Rescale coordinates -----------------
+                # Rescale coordinates from padded 640x640 space to original image space
+                b_rescaled = b.copy()
+                b_rescaled[0:4] /= scale_ratio  # Rescale bbox
+                b_rescaled[5:] /= scale_ratio  # Rescale landmarks
 
-                text = "{:.4f}".format(b[4])
-                b = list(map(int, b))
+                # Save rescaled detection to txt file
+                line = f"{int(b_rescaled[0])} {int(b_rescaled[1])} {int(b_rescaled[2])} {int(b_rescaled[3])} {b_rescaled[4]:.5f} {int(b_rescaled[5])} {int(b_rescaled[6])} {int(b_rescaled[7])} {int(b_rescaled[8])} {int(b_rescaled[9])} {int(b_rescaled[10])} {int(b_rescaled[11])} {int(b_rescaled[12])} {int(b_rescaled[13])} {int(b_rescaled[14])}\n"
+                f_txt.write(line)
+
+                # Use rescaled coordinates for drawing on the *original* raw image
+                text = "{:.4f}".format(b_rescaled[4])
+                b = list(map(int, b_rescaled))
+                # ----------------- MODIFICATION END --------------------------------------
+
                 cv2.rectangle(img_raw, (b[0], b[1]), (b[2], b[3]), (0, 0, 255), 2)
                 cx = b[0]
                 cy = b[1] + 12
