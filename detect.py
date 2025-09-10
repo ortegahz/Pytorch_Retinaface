@@ -1,22 +1,25 @@
 from __future__ import print_function
-import os
+
 import argparse
+import os
+import time
+
+import cv2
+import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
-import numpy as np
+
 from data import cfg_mnet, cfg_re50
 from layers.functions.prior_box import PriorBox
-from utils.nms.py_cpu_nms import py_cpu_nms
-import cv2
 from models.retinaface import RetinaFace
 from utils.box_utils import decode, decode_landm
-import time
+from utils.nms.py_cpu_nms import py_cpu_nms
 
 parser = argparse.ArgumentParser(description='Retinaface')
 
-parser.add_argument('-m', '--trained_model', default='./weights/Resnet50_Final.pth',
+parser.add_argument('-m', '--trained_model', default='./weights/mobilenet0.25_Final.pth',
                     type=str, help='Trained state_dict file path to open')
-parser.add_argument('--network', default='resnet50', help='Backbone network mobile0.25 or resnet50')
+parser.add_argument('--network', default='mobile0.25', help='Backbone network mobile0.25 or resnet50')
 parser.add_argument('--cpu', action="store_true", default=False, help='Use cpu inference')
 parser.add_argument('--confidence_threshold', default=0.02, type=float, help='confidence_threshold')
 parser.add_argument('--top_k', default=5000, type=int, help='top_k')
@@ -71,7 +74,7 @@ if __name__ == '__main__':
     elif args.network == "resnet50":
         cfg = cfg_re50
     # net and model
-    net = RetinaFace(cfg=cfg, phase = 'test')
+    net = RetinaFace(cfg=cfg, phase='test')
     net = load_model(net, args.trained_model, args.cpu)
     net.eval()
     print('Finished loading model!')
@@ -83,7 +86,7 @@ if __name__ == '__main__':
     resize = 1
 
     # testing begin
-    for i in range(100):
+    for i in range(1):
         image_path = "./curve/test.jpg"
         img_raw = cv2.imread(image_path, cv2.IMREAD_COLOR)
 
@@ -144,9 +147,24 @@ if __name__ == '__main__':
 
         # show image
         if args.save_image:
+            # ----------------- MODIFICATION START -----------------
+            # Define save path for image and txt, and open txt file for writing
+            save_img_path = "/home/Huangzhe/test/manu-pc/tmp/test.jpg"
+            save_txt_path = os.path.splitext(save_img_path)[0] + ".txt"
+            f_txt = open(save_txt_path, 'w')
+            # ----------------- MODIFICATION END -------------------
+
             for b in dets:
                 if b[4] < args.vis_thres:
                     continue
+
+                # ----------------- MODIFICATION START -----------------
+                # Save detection to txt file: bbox, score, and kps
+                # Format: x1 y1 x2 y2 score ldm1_x ldm1_y ... ldm5_x ldm5_y
+                line = f"{int(b[0])} {int(b[1])} {int(b[2])} {int(b[3])} {b[4]:.5f} {int(b[5])} {int(b[6])} {int(b[7])} {int(b[8])} {int(b[9])} {int(b[10])} {int(b[11])} {int(b[12])} {int(b[13])} {int(b[14])}\n"
+                f_txt.write(line)
+                # ----------------- MODIFICATION END -------------------
+
                 text = "{:.4f}".format(b[4])
                 b = list(map(int, b))
                 cv2.rectangle(img_raw, (b[0], b[1]), (b[2], b[3]), (0, 0, 255), 2)
@@ -161,8 +179,10 @@ if __name__ == '__main__':
                 cv2.circle(img_raw, (b[9], b[10]), 1, (255, 0, 255), 4)
                 cv2.circle(img_raw, (b[11], b[12]), 1, (0, 255, 0), 4)
                 cv2.circle(img_raw, (b[13], b[14]), 1, (255, 0, 0), 4)
+
+            # ----------------- MODIFICATION START -----------------
+            f_txt.close()
+            # ----------------- MODIFICATION END -------------------
+
             # save image
-
-            name = "test.jpg"
-            cv2.imwrite(name, img_raw)
-
+            cv2.imwrite(save_img_path, img_raw)
