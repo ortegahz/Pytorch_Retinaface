@@ -88,7 +88,7 @@ if __name__ == '__main__':
 
     # testing begin
     for i in range(1):
-        image_path = "/home/Huangzhe/test/manu-pc/tmp/padded_test.bmp"
+        image_path = "./curve/test.jpg"
         img_raw = cv2.imread(image_path, cv2.IMREAD_COLOR)
 
         # ----------------- MODIFICATION START: Image padding and resizing -----------------
@@ -184,7 +184,7 @@ if __name__ == '__main__':
             # ----------------- MODIFICATION START -----------------
             # Define save path for image and txt, and open txt file for writing
             save_img_path = os.path.join(save_dir, "test.jpg")
-            save_txt_path = os.path.splitext(save_img_path)[0] + ".txt"
+            save_txt_path = os.path.splitext(save_img_path)[0] + "_py.txt"
             f_txt = open(save_txt_path, 'w')
             # ----------------- MODIFICATION END -------------------
 
